@@ -3,7 +3,7 @@ from tkinter import ttk, filedialog, messagebox
 import pandas as pd
 import matplotlib.pyplot as plt
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg, NavigationToolbar2Tk
-from matplotlib.ticker import MaxNLocator  # Добавлен импорт для исправления дробных годов
+from matplotlib.ticker import MaxNLocator
 
 
 # --- Блок бизнес-логики и работы с данными ---
@@ -70,11 +70,12 @@ class CrimeApp:
         btn_load = tk.Button(control_frame, text="Загрузить CSV", command=self.load_data)
         btn_load.pack(side=tk.LEFT, padx=5)
 
-        # --- НОВОЕ: Выпадающий список для выбора года ---
         tk.Label(control_frame, text="Год:").pack(side=tk.LEFT, padx=(15, 5))
         self.combo_year = ttk.Combobox(control_frame, values=["Все"], state="readonly", width=8)
         self.combo_year.current(0)
         self.combo_year.pack(side=tk.LEFT)
+        # НОВОЕ: Привязываем событие выбора в выпадающем списке
+        self.combo_year.bind("<<ComboboxSelected>>", self._on_combo_select)
 
         tk.Label(control_frame, text="Окно скользящей (n):").pack(side=tk.LEFT, padx=(15, 5))
         self.entry_n = tk.Entry(control_frame, width=5)
@@ -86,17 +87,17 @@ class CrimeApp:
         self.entry_forecast.insert(0, "4")
         self.entry_forecast.pack(side=tk.LEFT)
 
-        btn_plot = tk.Button(control_frame, text="Построить график", command=self.plot_data)
+        # Кнопка теперь нужна в основном для обновления прогноза (когда меняем параметры n или годы)
+        btn_plot = tk.Button(control_frame, text="Обновить график/прогноз", command=self.plot_data)
         btn_plot.pack(side=tk.LEFT, padx=15)
 
         self.lbl_stats = tk.Label(control_frame, text="Статистика: Данные не загружены", fg="blue", justify=tk.LEFT)
         self.lbl_stats.pack(side=tk.LEFT, padx=15)
 
-        # Разделение экрана на таблицу (слева) и графики (справа)
+        # Разделение экрана на таблицу и графики
         main_frame = tk.PanedWindow(self.root, orient=tk.HORIZONTAL)
         main_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
 
-        # Фрейм для таблицы
         table_frame = tk.Frame(main_frame)
         main_frame.add(table_frame, minsize=300)
 
@@ -105,11 +106,13 @@ class CrimeApp:
         hsb = ttk.Scrollbar(table_frame, orient="horizontal", command=self.tree.xview)
         self.tree.configure(yscrollcommand=vsb.set, xscrollcommand=hsb.set)
 
+        # НОВОЕ: Привязываем событие клика (выделения) по строке в таблице
+        self.tree.bind("<<TreeviewSelect>>", self._on_tree_select)
+
         self.tree.pack(fill=tk.BOTH, expand=True)
         vsb.pack(side=tk.RIGHT, fill=tk.Y)
         hsb.pack(side=tk.BOTTOM, fill=tk.X)
 
-        # Фрейм для графиков
         self.graph_frame = tk.Frame(main_frame)
         main_frame.add(self.graph_frame, minsize=600)
 
@@ -120,6 +123,46 @@ class CrimeApp:
         self.toolbar = NavigationToolbar2Tk(self.canvas, self.graph_frame)
         self.toolbar.update()
         self.canvas.get_tk_widget().pack(fill=tk.BOTH, expand=True)
+
+
+    def _on_tree_select(self, event):
+        """Вызывается при клике на строку в таблице."""
+        selected_item = self.tree.selection()
+        if not selected_item:
+            return
+
+        # Получаем год из выбранной строки (нулевой индекс)
+        item_values = self.tree.item(selected_item[0], "values")
+        try:
+            # Преобразуем в int, а затем в строку (чтобы отбросить возможные .0)
+            selected_year = str(int(float(item_values[0])))
+
+            # Если в комбобоксе другой год, меняем его и строим график
+            if self.combo_year.get() != selected_year:
+                self.combo_year.set(selected_year)
+                self.plot_data()
+        except ValueError:
+            pass
+
+    def _on_combo_select(self, event):
+        """Вызывается при выборе года в выпадающем списке."""
+        selected_year = self.combo_year.get()
+
+        # Синхронизируем выделение в таблице: ищем строку с этим годом
+        if selected_year != "Все":
+            for child in self.tree.get_children():
+                val = self.tree.item(child, 'values')[0]
+                if str(int(float(val))) == selected_year:
+                    self.tree.selection_set(child)
+                    self.tree.see(child)  # Прокручиваем таблицу к этой строке, если она скрыта
+                    break
+        else:
+            # Снимаем выделение, если выбрано "Все"
+            if self.tree.selection():
+                self.tree.selection_remove(self.tree.selection())
+
+        # Автоматически строим график
+        self.plot_data()
 
     def load_data(self):
         filepath = filedialog.askopenfilename(
@@ -137,6 +180,9 @@ class CrimeApp:
             years_list = ["Все"] + list(map(str, self.analyzer.years))
             self.combo_year.config(values=years_list)
             self.combo_year.current(0)
+
+            # НОВОЕ: Автоматически строим график сразу после загрузки файла
+            self.plot_data()
 
         except Exception as e:
             messagebox.showerror("Ошибка", f"Не удалось загрузить данные:\n{e}")
@@ -165,7 +211,6 @@ class CrimeApp:
 
     def plot_data(self):
         if not self.analyzer:
-            messagebox.showwarning("Внимание", "Сначала загрузите данные.")
             return
 
         try:
@@ -183,7 +228,6 @@ class CrimeApp:
         selected_year = self.combo_year.get()
 
         if selected_year == "Все":
-            # --- ЛОГИКА 1: Линейный график для всех лет с прогнозом ---
             last_year = int(years[-1])
             future_years = [last_year + i for i in range(1, forecast_years + 1)]
 
@@ -200,20 +244,15 @@ class CrimeApp:
             self.ax.set_xlabel("Год")
             self.ax.set_ylabel("Количество зарегистрированных случаев")
             self.ax.legend()
-
-            # --- ИСПРАВЛЕНИЕ ДРОБЕЙ: Принудительно делаем шаги по оси X целыми числами ---
             self.ax.xaxis.set_major_locator(MaxNLocator(integer=True))
 
         else:
-            # --- ЛОГИКА 2: Столбчатая диаграмма для одного выбранного года ---
             year_int = int(selected_year)
-            # Извлекаем строку с нужным годом
             year_data = df[df.iloc[:, 0] == year_int].iloc[0, 1:]
 
-            colors = ['#1f77b4', '#ff7f0e', '#2ca02c', '#d62728']  # Цвета из matplotlib по умолчанию
+            colors = ['#1f77b4', '#ff7f0e', '#2ca02c', '#d62728']
             bars = self.ax.bar(crime_columns, year_data.values, color=colors[:len(crime_columns)])
 
-            # Добавляем цифры прямо над столбиками для наглядности
             self.ax.bar_label(bars, padding=3)
 
             self.ax.set_title(f"Статистика преступности за {selected_year} год")
