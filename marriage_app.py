@@ -6,168 +6,313 @@ from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg, NavigationToolb
 
 
 def read_xlsx(path):
-    return pd.read_excel(path)
+    try:
+        return pd.read_excel(path)
+    except Exception:
+        raise Exception("Ошибка загрузки Excel файла")
 
 
 class MarriageAnalyzer:
     def __init__(self, root):
         self.root = root
         self.root.title("Анализ браков и разводов")
-        self.root.geometry("1350x900")
+        self.root.geometry("1400x900")
 
         self.data = None
-        self.filtered = None
 
         self.create_ui()
 
-    # ================= UI =================
+    # ===================== UI =====================
     def create_ui(self):
-        top = Frame(self.root)
-        top.pack(fill=X, pady=5)
+        top_frame = Frame(self.root)
+        top_frame.pack(fill=X, pady=10)
 
-        Button(top, text="Открыть файл", command=self.load_file, width=18).pack(side=LEFT, padx=5)
-        Button(top, text="График", command=self.build_graph, width=18).pack(side=LEFT, padx=5)
-        Button(top, text="Прогноз", command=self.build_forecast, width=18).pack(side=LEFT, padx=5)
+        Button(
+            top_frame,
+            text="Открыть XLSX",
+            command=self.load_file,
+            width=18
+        ).pack(side=LEFT, padx=5)
 
-        Label(top, text="N:").pack(side=LEFT)
-        self.n_scale = Scale(top, from_=2, to=10, orient=HORIZONTAL)
-        self.n_scale.set(3)
-        self.n_scale.pack(side=LEFT)
+        Button(
+            top_frame,
+            text="Показать график",
+            command=self.build_graph,
+            width=18
+        ).pack(side=LEFT, padx=5)
 
-        # таблица
+        Button(
+            top_frame,
+            text="Построить прогноз",
+            command=self.build_forecast,
+            width=18
+        ).pack(side=LEFT, padx=5)
+
+        Button(
+            top_frame,
+            text="Сброс",
+            command=self.clear_data,
+            width=18
+        ).pack(side=LEFT, padx=5)
+
+        Label(top_frame, text="Количество лет прогноза:").pack(side=LEFT, padx=5)
+
+        self.forecast_years = Scale(
+            top_frame,
+            from_=1,
+            to=10,
+            orient=HORIZONTAL
+        )
+        self.forecast_years.set(5)
+        self.forecast_years.pack(side=LEFT)
+
+        Label(top_frame, text="Скользящая средняя (N):").pack(side=LEFT, padx=10)
+
+        self.moving_n = Scale(
+            top_frame,
+            from_=2,
+            to=10,
+            orient=HORIZONTAL
+        )
+        self.moving_n.set(3)
+        self.moving_n.pack(side=LEFT)
+
+        # Таблица
         self.tree = ttk.Treeview(self.root)
-        self.tree.pack(fill=BOTH, expand=True)
+        self.tree.pack(fill=BOTH, expand=True, pady=10)
 
-        # вывод анализа
-        self.text = Text(self.root, height=10)
-        self.text.pack(fill=X)
+        # Поле результатов
+        self.result_text = Text(self.root, height=10)
+        self.result_text.pack(fill=X, padx=10, pady=10)
 
-    # ================= LOAD =================
+    # ===================== Загрузка файла =====================
     def load_file(self):
-        path = filedialog.askopenfilename(filetypes=[("Excel", "*.xlsx")])
+        path = filedialog.askopenfilename(
+            filetypes=[("Excel files", "*.xlsx")]
+        )
+
         if not path:
             return
 
-        self.data = pd.read_excel(path)
-        self.show_table()
+        try:
+            self.data = read_xlsx(path)
+            self.show_table()
+            self.analyze_data()
 
-    # ================= TABLE =================
+        except Exception as e:
+            messagebox.showerror("Ошибка", str(e))
+
+    # ===================== Таблица =====================
     def show_table(self):
         self.tree.delete(*self.tree.get_children())
 
         self.tree["columns"] = list(self.data.columns)
         self.tree["show"] = "headings"
 
-        for c in self.data.columns:
-            self.tree.heading(c, text=c)
-            self.tree.column(c, width=140)
+        for col in self.data.columns:
+            self.tree.heading(col, text=col)
+            self.tree.column(col, width=150)
 
         for _, row in self.data.iterrows():
             self.tree.insert("", END, values=list(row))
 
-    # ================= AGE ANALYSIS =================
-    def analyze_ages(self):
+    # ===================== Анализ возрастов =====================
+    def analyze_data(self):
         df = self.data
 
-        male_marriage = df.groupby("Возраст_мужчин_брак")["Браки"].sum().idxmax()
-        male_divorce = df.groupby("Возраст_мужчин_развод")["Разводы"].sum().idxmax()
+        male_marriage_age = df.groupby(
+            "Возраст_мужчин_брак"
+        )["Браки"].sum().idxmax()
 
-        female_marriage = df.groupby("Возраст_женщин_брак")["Браки"].sum().idxmax()
-        female_divorce = df.groupby("Возраст_женщин_развод")["Разводы"].sum().idxmax()
+        male_divorce_age = df.groupby(
+            "Возраст_мужчин_развод"
+        )["Разводы"].sum().idxmax()
+
+        female_marriage_age = df.groupby(
+            "Возраст_женщин_брак"
+        )["Браки"].sum().idxmax()
+
+        female_divorce_age = df.groupby(
+            "Возраст_женщин_развод"
+        )["Разводы"].sum().idxmax()
 
         result = ""
-        result += f"Мужчины чаще женились в возрасте: {male_marriage}\n"
-        result += f"Мужчины чаще разводились в возрасте: {male_divorce}\n\n"
-        result += f"Женщины чаще выходили замуж в возрасте: {female_marriage}\n"
-        result += f"Женщины чаще разводились в возрасте: {female_divorce}\n"
+        result += f"Мужчины чаще женились в возрасте: {male_marriage_age}\n"
+        result += f"Мужчины чаще разводились в возрасте: {male_divorce_age}\n\n"
 
-        self.text.delete(1.0, END)
-        self.text.insert(END, result)
+        result += f"Женщины чаще выходили замуж в возрасте: {female_marriage_age}\n"
+        result += f"Женщины чаще разводились в возрасте: {female_divorce_age}\n"
 
-    # ================= GRAPH =================
+        self.result_text.delete(1.0, END)
+        self.result_text.insert(END, result)
+
+    # ===================== Основной график =====================
     def build_graph(self):
         if self.data is None:
+            messagebox.showwarning("Ошибка", "Сначала загрузите файл")
             return
-
-        self.analyze_ages()
 
         df = self.data
 
-        win = Toplevel(self.root)
-        win.title("График")
+        graph_window = Toplevel(self.root)
+        graph_window.title("Графики")
 
-        fig, ax = plt.subplots(figsize=(10, 5))
+        fig, ax = plt.subplots(figsize=(11, 6))
 
-        ax.plot(df["Год"], df["Браки"], label="Браки")
-        ax.plot(df["Год"], df["Разводы"], label="Разводы")
+        ax.plot(
+            df["Год"],
+            df["Браки"],
+            marker='o',
+            linewidth=2,
+            label="Браки"
+        )
+
+        ax.plot(
+            df["Год"],
+            df["Разводы"],
+            marker='o',
+            linewidth=2,
+            label="Разводы"
+        )
 
         ax.set_title("Динамика браков и разводов")
         ax.set_xlabel("Год")
         ax.set_ylabel("Количество")
-        ax.legend()
         ax.grid()
+        ax.legend()
 
-        canvas = FigureCanvasTkAgg(fig, master=win)
+        canvas = FigureCanvasTkAgg(fig, master=graph_window)
         canvas.draw()
         canvas.get_tk_widget().pack(fill=BOTH, expand=True)
 
-        NavigationToolbar2Tk(canvas, win).update()
+        toolbar = NavigationToolbar2Tk(canvas, graph_window)
+        toolbar.update()
 
-    # ================= MOVING AVERAGE =================
-    def moving_average(self, values, n):
+    # ===================== Скользящая средняя =====================
+    def moving_average_forecast(self, values, window_size, forecast_steps):
+        window_size = int(window_size)
+        forecast_steps = int(forecast_steps)
+
         result = values.copy()
 
-        for _ in range(5):
-            result.append(sum(result[-n:]) / n)
+        for _ in range(forecast_steps):
+            avg = sum(result[-window_size:]) / window_size
+            result.append(avg)
 
         return result
 
-    # ================= FORECAST =================
+    # ===================== Прогноз =====================
     def build_forecast(self):
         if self.data is None:
+            messagebox.showwarning("Ошибка", "Сначала загрузите файл")
             return
-
-        n = self.n_scale.get()
 
         df = self.data
 
         years = df["Год"].tolist()
-        marriages = df["Браки"].tolist()
 
-        forecast = self.moving_average(marriages, n)
+        marriages = df["Браки"].tolist()
+        divorces = df["Разводы"].tolist()
+
+        forecast_years_count = self.forecast_years.get()
+        moving_n = self.moving_n.get()
+
+        marriage_forecast = self.moving_average_forecast(
+            marriages,
+            moving_n,
+            forecast_years_count
+        )
+
+        divorce_forecast = self.moving_average_forecast(
+            divorces,
+            moving_n,
+            forecast_years_count
+        )
 
         future_years = years.copy()
+
         last_year = years[-1]
 
-        for i in range(1, 6):
+        for i in range(1, forecast_years_count + 1):
             future_years.append(last_year + i)
 
-        win = Toplevel(self.root)
-        win.title("Прогноз")
+        forecast_window = Toplevel(self.root)
+        forecast_window.title("Прогноз")
 
-        fig, ax = plt.subplots(figsize=(10, 5))
+        fig, ax = plt.subplots(figsize=(11, 6))
 
-        # реальные данные
-        ax.plot(years, marriages, label="Факт")
+        # Браки (факт)
+        ax.plot(
+            years,
+            marriages,
+            color="green",
+            marker='o',
+            linewidth=2,
+            label="Браки (факт)"
+        )
 
-        # прогноз
-        ax.plot(future_years, forecast, "--o", label="Прогноз")
+        # Браки (прогноз)
+        ax.plot(
+            future_years,
+            marriage_forecast,
+            color="green",
+            linestyle="--",
+            marker='o',
+            linewidth=2,
+            label="Браки (прогноз)"
+        )
 
-        # закрашивание прогноза
-        ax.axvspan(years[-1], future_years[-1], color="gray", alpha=0.2)
+        # Разводы (факт)
+        ax.plot(
+            years,
+            divorces,
+            color="red",
+            marker='o',
+            linewidth=2,
+            label="Разводы (факт)"
+        )
+
+        # Разводы (прогноз)
+        ax.plot(
+            future_years,
+            divorce_forecast,
+            color="red",
+            linestyle="--",
+            marker='o',
+            linewidth=2,
+            label="Разводы (прогноз)"
+        )
+
+        # Выделение области прогноза
+        ax.axvspan(
+            years[-1],
+            future_years[-1],
+            color="gray",
+            alpha=0.2
+        )
 
         ax.set_title("Прогноз методом скользящей средней")
         ax.set_xlabel("Год")
         ax.set_ylabel("Количество")
-        ax.legend()
         ax.grid()
+        ax.legend()
 
-        canvas = FigureCanvasTkAgg(fig, master=win)
+        canvas = FigureCanvasTkAgg(fig, master=forecast_window)
         canvas.draw()
         canvas.get_tk_widget().pack(fill=BOTH, expand=True)
 
-        NavigationToolbar2Tk(canvas, win).update()
+        toolbar = NavigationToolbar2Tk(canvas, forecast_window)
+        toolbar.update()
 
+    # ===================== Сброс =====================
+    def clear_data(self):
+        self.tree.delete(*self.tree.get_children())
+
+        self.result_text.delete(1.0, END)
+
+        self.data = None
+
+        messagebox.showinfo("Сброс", "Таблица очищена")
 
 root = Tk()
 app = MarriageAnalyzer(root)
