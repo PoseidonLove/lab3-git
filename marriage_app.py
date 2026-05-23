@@ -314,6 +314,7 @@ class MarriageAnalyzer:
 
         messagebox.showinfo("Сброс", "Таблица очищена")
 
-root = Tk()
-app = MarriageAnalyzer(root)
-root.mainloop()
+if __name__ == "__main__":
+    root = Tk()
+    app = MarriageAnalyzer(root)
+    root.mainloop()
