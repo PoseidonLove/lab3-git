@@ -9,13 +9,13 @@ def read_xlsx_smart(path):
     try:
         return pd.read_excel(path)
     except Exception:
-        raise Exception("Failed to load Excel file")
+        raise Exception("Не удалось загрузить Excel файл")
 
 
 class MarriageAnalyzer:
     def __init__(self, root):
         self.root = root
-        self.root.title("Marriage and Divorce Analysis")
+        self.root.title("Анализ браков и разводов")
         self.root.geometry("1200x800")
 
         self.data = None
@@ -28,26 +28,26 @@ class MarriageAnalyzer:
 
         Button(
             top_frame,
-            text="Import XLSX",
+            text="Импорт XLSX",
             command=self.load_file,
             width=20
         ).grid(row=0, column=0, padx=5)
 
         Button(
             top_frame,
-            text="Show Graph",
+            text="Показать график",
             command=self.build_graphs,
             width=20
         ).grid(row=0, column=1, padx=5)
 
         Button(
             top_frame,
-            text="Forecast",
+            text="Прогноз",
             command=self.build_forecast,
             width=20
         ).grid(row=0, column=2, padx=5)
 
-        Label(top_frame, text="N (moving average):").grid(row=0, column=3)
+        Label(top_frame, text="N (скользящая средняя):").grid(row=0, column=3)
 
         self.n_entry = Entry(top_frame, width=10)
         self.n_entry.insert(0, "3")
@@ -59,10 +59,9 @@ class MarriageAnalyzer:
         self.result_text = Text(self.root, height=10)
         self.result_text.pack(fill=X, padx=10, pady=10)
 
-    # Load data only
     def load_file(self):
         file_path = filedialog.askopenfilename(
-            filetypes=[("Excel Files", "*.xlsx")]
+            filetypes=[("Excel файлы", "*.xlsx")]
         )
 
         if not file_path:
@@ -73,9 +72,8 @@ class MarriageAnalyzer:
             self.show_table()
 
         except Exception as e:
-            messagebox.showerror("Error", str(e))
+            messagebox.showerror("Ошибка", str(e))
 
-    # Show table only
     def show_table(self):
         self.tree.delete(*self.tree.get_children())
 
@@ -89,7 +87,6 @@ class MarriageAnalyzer:
         for _, row in self.data.iterrows():
             self.tree.insert("", END, values=list(row))
 
-    # Analysis stays separate
     def analyze_data(self):
         result = ""
 
@@ -99,31 +96,30 @@ class MarriageAnalyzer:
         female_marriage_age = self.data.groupby("Возраст_женщин_брак")["Браки"].sum().idxmax()
         female_divorce_age = self.data.groupby("Возраст_женщин_развод")["Разводы"].sum().idxmax()
 
-        result += f"Men most often married at age: {male_marriage_age}\n"
-        result += f"Men most often divorced at age: {male_divorce_age}\n\n"
-        result += f"Women most often married at age: {female_marriage_age}\n"
-        result += f"Women most often divorced at age: {female_divorce_age}\n"
+        result += f"Мужчины чаще женились в возрасте: {male_marriage_age}\n"
+        result += f"Мужчины чаще разводились в возрасте: {male_divorce_age}\n\n"
+        result += f"Женщины чаще выходили замуж в возрасте: {female_marriage_age}\n"
+        result += f"Женщины чаще разводились в возрасте: {female_divorce_age}\n"
 
         self.result_text.delete(1.0, END)
         self.result_text.insert(END, result)
 
-    # Graph button
     def build_graphs(self):
         if self.data is None:
-            messagebox.showwarning("Error", "Load file first")
+            messagebox.showwarning("Ошибка", "Сначала загрузите файл")
             return
 
         window = Toplevel(self.root)
-        window.title("Graphs")
+        window.title("Графики")
 
         fig, ax = plt.subplots(figsize=(10, 5))
 
-        ax.plot(self.data["Год"], self.data["Браки"], marker='o', label="Marriages")
-        ax.plot(self.data["Год"], self.data["Разводы"], marker='o', label="Divorces")
+        ax.plot(self.data["Год"], self.data["Браки"], marker='o', label="Браки")
+        ax.plot(self.data["Год"], self.data["Разводы"], marker='o', label="Разводы")
 
-        ax.set_title("Marriages and Divorces by Year")
-        ax.set_xlabel("Year")
-        ax.set_ylabel("Count")
+        ax.set_title("Браки и разводы по годам")
+        ax.set_xlabel("Год")
+        ax.set_ylabel("Количество")
         ax.legend()
         ax.grid()
 
@@ -133,7 +129,6 @@ class MarriageAnalyzer:
 
         self.analyze_data()
 
-    # Moving average
     def moving_average_forecast(self, values, n, steps):
         forecast = values.copy()
 
@@ -143,10 +138,9 @@ class MarriageAnalyzer:
 
         return forecast
 
-    # Forecast button
     def build_forecast(self):
         if self.data is None:
-            messagebox.showwarning("Error", "Load file first")
+            messagebox.showwarning("Ошибка", "Сначала загрузите файл")
             return
 
         try:
@@ -168,19 +162,19 @@ class MarriageAnalyzer:
                 future_years.append(last_year + i)
 
             window = Toplevel(self.root)
-            window.title("Forecast")
+            window.title("Прогноз")
 
             fig, ax = plt.subplots(figsize=(10, 5))
 
-            ax.plot(years, marriages, label="Marriages")
-            ax.plot(years, divorces, label="Divorces")
+            ax.plot(years, marriages, label="Браки")
+            ax.plot(years, divorces, label="Разводы")
 
-            ax.plot(future_years, marriage_forecast, "--o", label="Forecast marriages")
-            ax.plot(future_years, divorce_forecast, "--o", label="Forecast divorces")
+            ax.plot(future_years, marriage_forecast, "--o", label="Прогноз браков")
+            ax.plot(future_years, divorce_forecast, "--o", label="Прогноз разводов")
 
-            ax.set_title("Moving Average Forecast")
-            ax.set_xlabel("Year")
-            ax.set_ylabel("Count")
+            ax.set_title("Прогноз методом скользящей средней")
+            ax.set_xlabel("Год")
+            ax.set_ylabel("Количество")
             ax.legend()
             ax.grid()
 
@@ -189,7 +183,7 @@ class MarriageAnalyzer:
             canvas.get_tk_widget().pack(fill=BOTH, expand=True)
 
         except Exception as e:
-            messagebox.showerror("Error", str(e))
+            messagebox.showerror("Ошибка", str(e))
 
 
 root = Tk()
