@@ -1,19 +1,19 @@
 import tkinter as tk
 from crime_app import CrimeApp
-# from marriage_app import MarriageApp
+from marriage_app import MarriageAnalyzer
 
 def open_crime():
     # Создаем новое окно Toplevel поверх основного
     window = tk.Toplevel(root)
     window.title("Анализ преступности")
-    # Передаем window как родительский элемент для твоего класса
+    # Передаем window как родительский элемент для Crime
     app = CrimeApp(window)
 
 def open_marriage():
     window = tk.Toplevel(root)
     window.title("Анализ браков и разводов")
-    # Передаем window как родительский элемент для класса друга
-    # app = MarriageApp(window)
+    # Передаем window как родительский элемент для Marriage
+    app = MarriageAnalyzer(window)
 
 root = tk.Tk()
 root.title("Главное меню")
